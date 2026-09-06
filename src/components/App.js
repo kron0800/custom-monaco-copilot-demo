@@ -11,13 +11,27 @@ import XmlValidator from './Editor/XmlValidator';
 import MonacoTheme from './Editor/MonacoTheme';
 import CodeSuggester from './Editor/CodeSuggester';
 import SyntaxHighlighter from './Editor/SyntaxHighligher';
+import config from '../config.json';
+
+const resolveEndpoint = (url) => {
+  if (!url) return '';
+  const trimmed = url.trim().replace(/\/+$/, '');
+  if (trimmed.endsWith('/chat/completions')) {
+    return trimmed;
+  }
+  if (trimmed.endsWith('/v1')) {
+    return `${trimmed}/chat/completions`;
+  }
+  return `${trimmed}/v1/chat/completions`;
+};
 
 const App = () => {
-  const [apiKey, setApiKey] = useState(localStorage.getItem('apiKey') || '');
+  const apiUrl = config.apiEndpoint || 'https://api.openai.com/v1/chat/completions';
+  const apiKey = config.apiKey || '';
+
   const [messages, setMessages] = useState([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [hasErrors, setHasErrors] = useState(false);
-  const [apiUrl, setApiUrl] = useState(localStorage.getItem('apiUrl') || 'https://api.openai.com/v1/chat/completions');
   const editorRef = useRef(null);
 
   const handleClearChat = () => {
@@ -47,77 +61,81 @@ const App = () => {
 
     editorInstance.onDidChangeModelContent(handleEditorChange);
 
-    const codeSuggester = new CodeSuggester(editorInstance, apiKey, apiUrl, () => {});
-    codeSuggester.register();
+    let codeSuggester = null;
+    if (config.enableCodeSuggestions) {
+      codeSuggester = new CodeSuggester(editorInstance, apiKey, apiUrl, () => {});
+      codeSuggester.register();
+    }
 
     const syntaxHighlighter = new SyntaxHighlighter(monaco, editorInstance);
     syntaxHighlighter.initialize();
 
     return () => {
       editorInstance.dispose();
-      codeSuggester.dispose();
+      if (codeSuggester) {
+        codeSuggester.dispose();
+      }
     };
-  }, [apiKey]);
-
-  const handleApiKeyChange = (event) => {
-    setApiKey(event.target.value);
-  };
-
-  const handleApiKeySubmit = (event) => {
-    event.preventDefault();
-    localStorage.setItem('apiKey', apiKey);
-    localStorage.setItem('apiUrl', apiUrl); 
-  };
+  }, []);
 
   const handleMessageSent = async (message) => {
     setMessages((prevMessages) => [...prevMessages, { type: 'user', text: message }]);
     setIsStreaming(true);
     setHasErrors(false);
     const currentModel = monaco.editor.getModels()[0];
-    const currentCode = currentModel.getValue();
+    const currentCode = currentModel ? currentModel.getValue() : '';
 
-    let headers = {
+    const targetUrl = resolveEndpoint(apiUrl);
+    const headers = {
       'Content-Type': 'application/json',
     };
 
-    if (apiUrl !== 'https://api.openai.com/v1/chat/completions') {
-      headers['api-key'] = apiKey;
-    } else {
+    if (targetUrl.includes('.openai.azure.com')) {
+      if (apiKey) {
+        headers['api-key'] = apiKey;
+      }
+    } else if (apiKey) {
       headers['Authorization'] = `Bearer ${apiKey}`;
     }
 
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify({
-        model: 'gpt-4',
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You are an AI assistant that helps with coding and Azure API Management policy development. Provide helpful suggestions and answers based on the code context and user messages.',
-          },
-          {
-            role: 'user',
-            content: `Here's the current code:\n\n${currentCode}\n\nUser message: ${message}`,
-          },
-        ],
-        max_tokens: 500,
-        n: 1,
-        stream: true,
-        temperature: 0.7,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
-
     try {
+      const response = await fetch(targetUrl, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({
+          model: config.model || 'gpt-4o',
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are an AI assistant that helps with coding and Azure API Management policy development. Provide helpful suggestions and answers based on the code context and user messages.',
+            },
+            {
+              role: 'user',
+              content: `Here's the current code:\n\n${currentCode}\n\nUser message: ${message}`,
+            },
+          ],
+          max_tokens: config.max_tokens || 500,
+          n: 1,
+          stream: true,
+          temperature: config.temperature ?? 0.7,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`HTTP error! status: ${response.status}`, errorText);
+        setMessages((prevMessages) => [
+          ...prevMessages,
+          { type: 'bot', text: `Server error (${response.status}): ${errorText || response.statusText}` },
+        ]);
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -130,22 +148,23 @@ const App = () => {
           const trimmedLine = line.trim();
           if (trimmedLine === '') continue;
           if (trimmedLine === 'data: [DONE]') continue;
-          
+
           if (trimmedLine.startsWith('data: ')) {
             try {
               const data = JSON.parse(trimmedLine.slice(6));
               if (data.choices && data.choices.length > 0) {
                 const delta = data.choices[0].delta;
-                if (delta.content) {
+                const tokenContent = delta?.content || delta?.text || '';
+                if (tokenContent) {
                   setMessages((prevMessages) => {
                     const lastMessage = prevMessages[prevMessages.length - 1];
-                    if (lastMessage.type === 'bot') {
+                    if (lastMessage && lastMessage.type === 'bot') {
                       return [
                         ...prevMessages.slice(0, -1),
-                        { type: 'bot', text: lastMessage.text + delta.content },
+                        { type: 'bot', text: lastMessage.text + tokenContent },
                       ];
                     } else {
-                      return [...prevMessages, { type: 'bot', text: delta.content }];
+                      return [...prevMessages, { type: 'bot', text: tokenContent }];
                     }
                   });
                 }
@@ -157,8 +176,37 @@ const App = () => {
           }
         }
       }
+
+      if (buffer.trim() && !buffer.trim().startsWith('data:')) {
+        try {
+          const data = JSON.parse(buffer.trim());
+          const content = data.choices?.[0]?.message?.content || data.choices?.[0]?.text;
+          if (content) {
+            setMessages((prevMessages) => {
+              const lastMessage = prevMessages[prevMessages.length - 1];
+              if (lastMessage && lastMessage.type === 'bot') {
+                return [
+                  ...prevMessages.slice(0, -1),
+                  { type: 'bot', text: lastMessage.text + content },
+                ];
+              } else {
+                return [...prevMessages, { type: 'bot', text: content }];
+              }
+            });
+          }
+        } catch {
+          // ignore
+        }
+      }
     } catch (error) {
-      console.error('Error reading stream:', error);
+      console.error('Error in chat request:', error);
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        {
+          type: 'bot',
+          text: `API connection error (${targetUrl}): ${error.message}. Ensure the endpoint is running and allows CORS requests.`,
+        },
+      ]);
     } finally {
       setIsStreaming(false);
     }
@@ -166,27 +214,6 @@ const App = () => {
 
   return (
     <div className="app">
-      <div className="api-key-container">
-        <form onSubmit={handleApiKeySubmit}> 
-          <input
-            type="text"
-            value={apiUrl}
-            onChange={(e) => setApiUrl(e.target.value)}
-            placeholder="Enter the OpenAI API URL"
-            className="api-url-input"
-          />
-        </form>
-        <form onSubmit={handleApiKeySubmit}>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={handleApiKeyChange}
-            placeholder="Enter your OpenAI API key"
-            className="api-key-input"
-          />
-          <button type="submit" className="api-key-submit">Save</button>
-        </form>
-      </div>
       <div className="editor-chat-container">
         <div className="editor">
           <div ref={editorRef} className="monaco-editor" style={{ height: '100%', width: '100%' }} />

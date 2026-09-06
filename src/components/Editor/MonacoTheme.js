@@ -5,8 +5,21 @@
 
 const MonacoTheme = {
   base: 'vs-dark',
-  inherit: true,
-  rules: [],
+  rules: [
+    { token: '', foreground: 'd4d4d4' },
+    { token: 'delimiter', foreground: '808080' },
+    { token: 'tag', foreground: '569cd6' },
+    { token: 'tag.inbound', foreground: 'ff6b4a', fontStyle: 'bold' },
+    { token: 'tag.backend', foreground: '4ec9b0', fontStyle: 'bold' },
+    { token: 'tag.outbound', foreground: '569cd6', fontStyle: 'bold' },
+    { token: 'tag.on-error', foreground: 'e5c07b', fontStyle: 'bold' },
+    { token: 'attribute.name', foreground: '9cdcfe' },
+    { token: 'attribute.value', foreground: 'ce9178' },
+    { token: 'attribute', foreground: '9cdcfe' },
+    { token: 'string', foreground: 'ce9178' },
+    { token: 'comment', foreground: '6a9955', fontStyle: 'italic' },
+    { token: 'metatag', foreground: 'c586c0' },
+  ],
   colors: {
     // Editor main colors
     'editor.background': '#1e1e1e',

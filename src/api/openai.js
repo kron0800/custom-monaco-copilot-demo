@@ -3,23 +3,25 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export const generateCodeSuggestion = async (prompt, context, apiKey, apiUrl) => {
-  const apiURL = apiUrl;
-  const requestHeaders = {
-      'Content-Type': 'application/json',
-    };
-  
+import config from '../config.json';
 
-  if (apiUrl !== 'https://api.openai.com/v1/chat/completions') {
-    requestHeaders['api-key'] = apiKey;
-  } else {
-    requestHeaders['Authorization'] = `Bearer ${apiKey}`;
+export const generateCodeSuggestion = async (prompt, context, apiKey, apiUrl) => {
+  const targetUrl = apiUrl || config.apiEndpoint;
+  const key = apiKey || config.apiKey;
+  const requestHeaders = {
+    'Content-Type': 'application/json',
+  };
+
+  if (targetUrl && targetUrl.includes('.openai.azure.com')) {
+    if (key) requestHeaders['api-key'] = key;
+  } else if (key) {
+    requestHeaders['Authorization'] = `Bearer ${key}`;
   }
 
   const requestBody = createRequestBody(prompt, context);
 
   try {
-    const response = await postRequest(apiURL, requestHeaders, requestBody);
+    const response = await postRequest(targetUrl, requestHeaders, requestBody);
     return handleResponse(response);
   } catch (error) {
     console.error('Error generating code suggestion:', error);
@@ -29,7 +31,7 @@ export const generateCodeSuggestion = async (prompt, context, apiKey, apiUrl) =>
 
 const createRequestBody = (prompt, context) => {
   return JSON.stringify({
-    model: 'gpt-4',
+    model: config.model || 'gpt-4o',
     messages: [
       {
         role: 'system',

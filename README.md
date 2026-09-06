@@ -131,15 +131,44 @@ const handleMessageSent = async (message) => {
 };
 ``` 
 
+## Configuration (`src/config.json`)
+
+All API and editor behaviors are centralized in [`src/config.json`](src/config.json) without hardcoded values:
+
+```json
+{
+  "apiEndpoint": "http://OPENAI_COMPATIBLE_API_ENDPOINT/v1/chat/completions",
+  "apiKey": "YOUR_API_KEY_HERE",
+  "model": "gpt-4o",
+  "enableCodeSuggestions": false,
+  "temperature": 0.7,
+  "max_tokens": 500
+}
+```
+
+### Configuration Options
+- **`apiEndpoint`**: The OpenAI-compatible Chat Completions endpoint (supports any standard OpenAI-compatible server such as vLLM, Ollama, LocalAI, custom agents, or OpenAI). Supports both base URLs (e.g., `http://host:port`) and full paths (e.g., `http://host:port/v1/chat/completions`).
+- **`apiKey`**: Optional authentication bearer token (`Authorization: Bearer <key>`).
+- **`model`**: Model name sent in the completions request payload (e.g., `gpt-4o`, `gpt-4`, or custom models).
+- **`enableCodeSuggestions`**: Set to `false` to disable inline/trigger code completion calls to the LLM backend.
+- **`temperature`** & **`max_tokens`**: Generation parameters for chat completions.
+
+## Recent Changes & Improvements
+- **Universal OpenAI-Compatible API Support**: Updated the API integration and headers to support any OpenAI-compatible server adhering to the standard request and response structure, alongside standard streaming and error reporting directly in the chat interface.
+- **Centralized Configuration**: Removed the top input header bar from the UI to drive all settings directly from `src/config.json`.
+- **Fixed Monaco Syntax Highlighting**: Integrated the official Monaco XML grammar and tokenizer along with Dark+ theme definitions and custom highlights for APIM policy blocks (`<inbound>`, `<backend>`, `<outbound>`, `<on-error>`).
+- **Configurable Code Suggestions**: Code suggestions can now be disabled cleanly via configuration without making background API requests on typing.
+
 ## Usage
 > [!NOTE]
 > This is strictly for demonstration and educational purposes, and is not intended or appropriate for production use.
 To use the AI-assisted code editor:
 
-- Clone the repository: `git clone https://github.com/microsoft/custom-monaco-copilot-demo.git`
+- Clone the repository: `git clone git@github.com:kron0800/custom-monaco-copilot-demo.git`
 - Install the dependencies: `npm install`
-- Run it: : `npm start`
-- Open the browser and set up your OpenAI API key in the App
+- Adjust `src/config.json` with your desired endpoint and model settings
+- Run it: `npm start`
+- Open your browser at `http://localhost:3000`
 
 ## Contributors
 <p float="left">

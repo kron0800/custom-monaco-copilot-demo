@@ -23,7 +23,7 @@ body, html {
 .editor-chat-container {
   display: flex;
   width: 100%;
-  height: calc(100vh - 80px);
+  height: calc(100vh - 40px);
   overflow: hidden;
 }
 
@@ -50,49 +50,6 @@ body, html {
   padding: 2px;
   border-radius: 50%;
   cursor: pointer;
-}
-
-.api-key-container {
-  display: flex;
-  align-items: center;
-  margin-bottom: 10px;
-  gap: 20px;
-  justify-content: space-around;
-  flex-wrap: wrap;
-}
-
-
-.api-key-container h2 {
-  font-size: 24px;
-  margin-bottom: 10px;
-}
-
-.api-key-container form {
-  display: flex;
-  align-items: center;
-}
-
-.api-key-input, .api-url-input {
-  padding: 5px;
-  font-size: 14px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  margin-right: 10px;
-  width: 300px;
-}
-
-.api-key-submit {
-  padding: 5px 10px;
-  font-size: 14px;
-  background-color: #264f78;
-  color: #d4d4d4;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.api-key-submit:hover {
-  background-color: #0056b3;
 }
 
 .suggestion-line {
